@@ -13,3 +13,28 @@ if (user) {
   return res.status(400).json({ errors: [{ msg: "User already exists" }] });
 }
 ```
+
+## populate, méthode mongoose
+
+La méthode populate() permet de compléter les infos récupérées dans une collection quand une réf (un lien) est inclus dans le model.
+
+Ex: Dans routes/api/profile.js
+
+```js
+// On va récupérer le profile qui correspond à l'id du user connecté. On populate (rajoute) les infos name et avatar venant du model "user". On peut populate parce que dans le modèle de Profile, on a inclus un lien vers le modèle cible (ici "user") (voir le modèle de Profile ligne 4)
+const profile = await Profile.findOne({ user: req.user.id }).populate("user", [
+  "name",
+  "avatar",
+]);
+```
+
+Dans models/Profile.js
+
+```js
+const ProfileSchema = new mongoose.Schema({
+  user: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'user'
+  }
+)}
+```

@@ -9,8 +9,8 @@ const jwt = require('jsonwebtoken')
 
 
 // @route   GET api/auth
-// @desc    Test route
-// @access  Public
+// @desc    Get user by token
+// @access  Private
 router.get("/", auth, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select("-password");
