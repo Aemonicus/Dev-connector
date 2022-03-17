@@ -1,3 +1,4 @@
 {
-  "mongoURI": "mongodb+srv://Aemonicus:lkdnzer77@cluster0.wjtjv.mongodb.net/myFirstDatabase?retryWrites=true&w=majority"
+  "mongoURI": "mongodb+srv://Aemonicus:lkdnzer77@cluster0.wjtjv.mongodb.net/myFirstDatabase?retryWrites=true&w=majority",
+  "jwtSecret": "ffpoajsnvsdfmjgsdg"
 }
