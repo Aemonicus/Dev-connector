@@ -15,7 +15,7 @@ module.exports = function (req, res, next) {
   try {
     const decoded = jwt.verify(token, config.get("jwtSecret"));
 
-    // On a les infos du user dans le payload du token (id, name..) et on les pose dans un objet user de la requête
+    // On a les infos du user dans le payload du token (id dans notre cas, voir à la création/login du user) et on les pose dans un objet user de la requête
     req.user = decoded.user;
     next();
   } catch (err) {

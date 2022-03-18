@@ -141,4 +141,20 @@ router.get("/user/:user_id", async (req, res) => {
   }
 })
 
+
+// @route   DELETE api/profile
+// @desc    Delete profile, user & posts
+// @access  Private
+router.delete("/", auth, async (req, res) => {
+  try {
+    // Comme on passe d'abord par auth, on a accès à l'id grâce au token dans la requete car on les a rajouté dans le middleware auth
+    await Profile.findOneAndRemove({ user: req.user.id });
+    await User.findOneAndRemove({ _id: req.user.id });
+    res.json({ msg: "User deleted" })
+  } catch (err) {
+    console.error(err.message)
+    res.status(400).json({ msg: "Profile not found" })
+  }
+})
+
 module.exports = router
