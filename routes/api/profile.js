@@ -157,4 +157,62 @@ router.delete("/", auth, async (req, res) => {
   }
 })
 
+
+// @route   PUT api/profile/experience
+// @desc    Add profile experience
+// @access  Private
+router.put("/experience", [ auth, [
+  check("title", "Title is required")
+    .not()
+    .isEmpty(),
+  check("company", "Company is required")
+    .not()
+    .isEmpty(),
+  check("from", "From date is required")
+    .not()
+    .isEmpty(),
+
+] ], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
+
+  // On récupère les infos de la requêtes
+  const {
+    title,
+    company,
+    location,
+    from,
+    to,
+    current,
+    description
+  } = req.body;
+
+  // On crée un nouvel obj à partir des infos du dessus
+  const newExp = {
+    title,
+    company,
+    location,
+    from,
+    to,
+    current,
+    description
+  }
+
+  try {
+    // Comme on passe d'abord par auth, on a accès à l'id grâce au token dans la requete car on les a rajouté dans le middleware auth
+    const profile = await Profile.findOne({ user: req.user.id });
+
+    profile.experience.unshift(newExp);
+
+    await profile.save();
+
+    res.json(profile);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send("Server Error")
+  }
+})
+
 module.exports = router
