@@ -14,6 +14,8 @@ if (user) {
 }
 ```
 
+## Les méthodes mongoose renvoient toujours une promise donc async et surtout await devant chaque transactions avec la bdd (findOne, save etc..)
+
 ## populate, méthode mongoose
 
 La méthode populate() permet de compléter les infos récupérées dans une collection quand une réf (un lien) est inclus dans le model.
