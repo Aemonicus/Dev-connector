@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom';
 
-
 const Register = () => {
   const [ formData, setFormData ] = useState({
     name: "",
@@ -14,17 +13,19 @@ const Register = () => {
 
   const onChange = e => setFormData({ ...formData, [ e.target.name ]: e.target.value })
 
-  const onSubmit = e => {
+  const onSubmit = async (e) => {
     e.preventDefault();
     if (password !== password2) {
-      console.log("PRoblème de password")
+      console.log("Problème de password")
     } else {
-      console.log(formData)
+
+      console.log("yo");
+
     }
   }
 
   return (
-    <>
+    <section className="container">
       <h1 className="large text-primary">Sign Up</h1>
       <p className="lead"><i className="fas fa-user"></i> Create Your Account</p>
       <form className="form" onSubmit={e => onSubmit(e)} >
@@ -63,7 +64,7 @@ const Register = () => {
       <p className="my-1">
         Already have an account? <Link to="/login">Sign In</Link>
       </p>
-    </>
+    </section>
   )
 }
 

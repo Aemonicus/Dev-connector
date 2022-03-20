@@ -488,6 +488,10 @@ button {
   margin-bottom: 0.5rem;
 }
 
+.mt-title {
+  margin-top: 6rem;
+}
+
 /* Mobile Styles */
 @media (max-width: 700px) {
   .container {
