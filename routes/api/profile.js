@@ -6,6 +6,7 @@ const auth = require("../../middleware/auth")
 const { check, validationResult } = require('express-validator')
 const Profile = require("../../models/Profile")
 const User = require("../../models/User")
+const Post = require("../../models/Post")
 
 // @route   GET api/profile/me
 // @desc    Get current user profile
@@ -150,6 +151,8 @@ router.get("/user/:user_id", async (req, res) => {
 router.delete("/", auth, async (req, res) => {
   try {
     // Comme on passe d'abord par auth, on a accès à l'id grâce au token dans la requete car on les a rajouté dans le middleware auth
+    // Bien poser la suppression des posts avant la suppression des users sinon on ne peut pas trouver les posts en passant par le user.id lol
+    await Post.deleteMany({ user: req.user.id });
     await Profile.findOneAndRemove({ user: req.user.id });
     await User.findOneAndRemove({ _id: req.user.id });
     res.json({ msg: "User deleted" })
