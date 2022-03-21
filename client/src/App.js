@@ -7,7 +7,7 @@ import Register from './components/auth/Register';
 import Login from './components/auth/Login';
 import Alert from './components/layout/Alert';
 import Dashboard from './components/dashboard/Dashboard';
-// import ProfileForm from './components/profile-forms/ProfileForm';
+import ProfileForm from './components/profile-forms/ProfileForm';
 // import AddExperience from './components/profile-forms/AddExperience';
 // import AddEducation from './components/profile-forms/AddEducation';
 // import Profiles from './components/profiles/Profiles';
@@ -57,10 +57,10 @@ const App = () => {
             path="dashboard"
             element={<PrivateRoute component={Dashboard} />}
           />
-          {/* <Route
-          path="create-profile"
-          element={<PrivateRoute component={ProfileForm} />}
-        /> */}
+          <Route
+            path="create-profile"
+            element={<PrivateRoute component={ProfileForm} />}
+          />
           {/* <Route
           path="edit-profile"
           element={<PrivateRoute component={ProfileForm} />}
