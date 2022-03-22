@@ -1,3 +1,5 @@
 node_modules/
-default.json
-.vscode/
+config/production.json
+config/default.json
+client/build
+client/.eslintcache

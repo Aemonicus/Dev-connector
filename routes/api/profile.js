@@ -1,58 +1,55 @@
 const express = require('express');
-const request = require('request');
+const axios = require('axios');
 const config = require('config');
-const router = express.Router()
-const auth = require("../../middleware/auth")
-const { check, validationResult } = require('express-validator')
-const Profile = require("../../models/Profile")
-const User = require("../../models/User")
-const Post = require("../../models/Post")
+const router = express.Router();
+const auth = require('../../middleware/auth');
+const { check, validationResult } = require('express-validator');
+// bring in normalize to give us a proper url, regardless of what user entered
+const normalize = require('normalize-url');
+const checkObjectId = require('../../middleware/checkObjectId');
 
-// @route   GET api/profile/me
-// @desc    Get current user profile
-// @access  Private
-router.get("/me", auth, async (req, res) => {
+const Profile = require('../../models/Profile');
+const User = require('../../models/User');
+const Post = require('../../models/Post');
+
+// @route    GET api/profile/me
+// @desc     Get current users profile
+// @access   Private
+router.get('/me', auth, async (req, res) => {
   try {
     // On va récupérer le profile qui correspond à l'id du user connecté. On populate (rajoute) les infos name et avatar venant du model "user". On peut populate parce que dans le model de Profile, on a inclus un lien vers le model de user (voire le model de Profile ligne 4)
-    const profile = await Profile.findOne({ user: req.user.id }).populate("user", [ "name", "avatar" ])
+    const profile = await Profile.findOne({
+      user: req.user.id
+    }).populate('user', [ 'name', 'avatar' ]);
 
     if (!profile) {
-      return res.status(400).json({ msg: "There is no profile for this user" })
+      return res.status(400).json({ msg: 'There is no profile for this user' });
     }
 
-    res.json(profile)
-
+    res.json(profile);
   } catch (err) {
-    console.error(err.message)
-    res.status(500).send("Server Error")
+    console.error(err.message);
+    res.status(500).send('Server Error');
   }
-})
+});
 
-
-// @route   POST api/profile
-// @desc    Create or Update user profile
-// @access  Private
-router.post("/", [ auth, [
-  check("status", "Status is required")
-    .not()
-    .isEmpty(),
-  check("skills", "Skills is required")
-    .not()
-    .isEmpty() ] ],
+// @route    POST api/profile
+// @desc     Create or update user profile
+// @access   Private
+router.post(
+  '/',
+  auth,
+  check('status', 'Status is required').notEmpty(),
+  check('skills', 'Skills is required').notEmpty(),
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ errors: errors.array() });
-    };
+    }
 
     // destructure the request
     const {
-      company,
-      location,
-      bio,
-      status,
       website,
-      githubusername,
       skills,
       youtube,
       twitter,
@@ -63,296 +60,225 @@ router.post("/", [ auth, [
       ...rest
     } = req.body;
 
-    // Build profile object
-    const profileFields = {}
-    profileFields.user = req.user.id;
-    if (company) profileFields.company = company;
-    if (website) profileFields.website = website;
-    if (location) profileFields.location = location;
-    if (bio) profileFields.bio = bio;
-    if (status) profileFields.status = status;
-    if (githubusername) profileFields.githubusername = githubusername;
-    if (skills) {
-      profileFields.skills = skills.split(",").map(skill => skill.trim());
-    }
+    // build a profile
+    const profileFields = {
+      user: req.user.id,
+      website:
+        website && website !== ''
+          ? normalize(website, { forceHttps: true })
+          : '',
+      skills: Array.isArray(skills)
+        ? skills
+        : skills.split(',').map((skill) => ' ' + skill.trim()),
+      ...rest
+    };
 
-    // Build social object
-    // Need to create empty one first or we will have an error saying "can't find profileFields.social" something like this
-    profileFields.social = {}
-    if (youtube) profileFields.social.youtube = youtube;
-    if (twitter) profileFields.social.twitter = twitter;
-    if (facebook) profileFields.social.facebook = facebook;
-    if (linkedin) profileFields.social.linkedin = linkedin;
-    if (instagram) profileFields.social.instagram = instagram;
+    // Build socialFields object
+    const socialFields = { youtube, twitter, instagram, linkedin, facebook };
+
+    // normalize social fields to ensure valid url
+    for (const [ key, value ] of Object.entries(socialFields)) {
+      if (value && value.length > 0)
+        socialFields[ key ] = normalize(value, { forceHttps: true });
+    }
+    // add to profileFields
+    profileFields.social = socialFields;
 
     try {
-      let profile = await Profile.findOne({ user: req.user.id });
-
-      if (profile) {
-        // Update
-        profile = await Profile.findOneAndUpdate(
-          { user: req.user.id },
-          { $set: profileFields },
-          { new: true }
-        );
-
-        return res.json(profile)
-      }
-
-      if (!profile) {
-        profile = new Profile(profileFields);
-        await profile.save();
-        res.json(profile);
-      }
+      // Using upsert option (creates new doc if no match is found):
+      let profile = await Profile.findOneAndUpdate(
+        { user: req.user.id },
+        { $set: profileFields },
+        { new: true, upsert: true, setDefaultsOnInsert: true }
+      );
+      return res.json(profile);
     } catch (err) {
-      console.error(err.message)
-      res.status(500).send("Server Error")
+      console.error(err.message);
+      return res.status(500).send('Server Error');
     }
-  })
-
-
-// @route   GET api/profile
-// @desc    Get all profiles
-// @access  Public
-router.get("/", async (req, res) => {
-  try {
-    const profiles = await Profile.find().populate("user", [ "name", "avatar" ]);
-    res.json(profiles)
-  } catch (err) {
-    console.error(err.message)
-    res.status(500).send("Server Error")
   }
-})
+);
 
-
-// @route   GET api/profile/user/:user_id
-// @desc    Get profile by user ID
-// @access  Public
-router.get("/user/:user_id", async (req, res) => {
+// @route    GET api/profile
+// @desc     Get all profiles
+// @access   Public
+router.get('/', async (req, res) => {
   try {
-    const profile = await Profile.findOne({ user: req.params.user_id }).populate("user", [ "name", "avatar" ]);
-
-    if (!profile) return res.status(400).json({ msg: "Profile not found" })
-
-    res.json(profile)
+    const profiles = await Profile.find().populate('user', [ 'name', 'avatar' ]);
+    res.json(profiles);
   } catch (err) {
-    console.error(err.message)
-    if (err.kind == "ObjectId") {
-      return res.status(400).json({ msg: "Profile not found" })
+    console.error(err.message);
+    res.status(500).send('Server Error');
+  }
+});
+
+// @route    GET api/profile/user/:user_id
+// @desc     Get profile by user ID
+// @access   Public
+router.get(
+  '/user/:user_id',
+  checkObjectId('user_id'),
+  async ({ params: { user_id } }, res) => {
+    try {
+      const profile = await Profile.findOne({
+        user: user_id
+      }).populate('user', [ 'name', 'avatar' ]);
+
+      if (!profile) return res.status(400).json({ msg: 'Profile not found' });
+
+      return res.json(profile);
+    } catch (err) {
+      console.error(err.message);
+      return res.status(500).json({ msg: 'Server error' });
     }
-    res.status(500).send("Server Error")
   }
-})
+);
 
-
-// @route   DELETE api/profile
-// @desc    Delete profile, user & posts
-// @access  Private
-router.delete("/", auth, async (req, res) => {
+// @route    DELETE api/profile
+// @desc     Delete profile, user & posts
+// @access   Private
+router.delete('/', auth, async (req, res) => {
   try {
     // Comme on passe d'abord par auth, on a accès à l'id grâce au token dans la requete car on les a rajouté dans le middleware auth
     // Bien poser la suppression des posts avant la suppression des users sinon on ne peut pas trouver les posts en passant par le user.id lol
-    await Post.deleteMany({ user: req.user.id });
-    await Profile.findOneAndRemove({ user: req.user.id });
-    await User.findOneAndRemove({ _id: req.user.id });
-    res.json({ msg: "User deleted" })
-  } catch (err) {
-    console.error(err.message)
-    res.status(400).json({ msg: "Profile not found" })
-  }
-})
+    // Remove user posts
+    // Remove profile
+    // Remove user
+    await Promise.all([
+      Post.deleteMany({ user: req.user.id }),
+      Profile.findOneAndRemove({ user: req.user.id }),
+      User.findOneAndRemove({ _id: req.user.id })
+    ]);
 
-
-// @route   PUT api/profile/experience
-// @desc    Add profile experience
-// @access  Private
-router.put("/experience", [ auth, [
-  check("title", "Title is required")
-    .not()
-    .isEmpty(),
-  check("company", "Company is required")
-    .not()
-    .isEmpty(),
-  check("from", "From date is required")
-    .not()
-    .isEmpty(),
-
-] ], async (req, res) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({ errors: errors.array() });
-  }
-
-  // On récupère les infos de la requêtes
-  const {
-    title,
-    company,
-    location,
-    from,
-    to,
-    current,
-    description
-  } = req.body;
-
-  // On crée un nouvel obj à partir des infos du dessus
-  const newExp = {
-    title,
-    company,
-    location,
-    from,
-    to,
-    current,
-    description
-  }
-
-  try {
-    // Comme on passe d'abord par auth, on a accès à l'id grâce au token dans la requete car on les a rajouté dans le middleware auth
-    const profile = await Profile.findOne({ user: req.user.id });
-
-    profile.experience.unshift(newExp);
-
-    await profile.save();
-
-    res.json(profile);
+    res.json({ msg: 'User deleted' });
   } catch (err) {
     console.error(err.message);
-    res.status(500).send("Server Error")
+    res.status(500).send('Server Error');
   }
-})
+});
 
+// @route    PUT api/profile/experience
+// @desc     Add profile experience
+// @access   Private
+router.put(
+  '/experience',
+  auth,
+  check('title', 'Title is required').notEmpty(),
+  check('company', 'Company is required').notEmpty(),
+  check('from', 'From date is required and needs to be from the past')
+    .notEmpty()
+    .custom((value, { req }) => (req.body.to ? value < req.body.to : true)),
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
 
-// @route   DELETE api/profile/experience/:exp_id
-// @desc    Delete experience from profile
-// @access  Private
-router.delete("/experience/:exp_id", auth, async (req, res) => {
+    try {
+      const profile = await Profile.findOne({ user: req.user.id });
+
+      profile.experience.unshift(req.body);
+
+      await profile.save();
+
+      res.json(profile);
+    } catch (err) {
+      console.error(err.message);
+      res.status(500).send('Server Error');
+    }
+  }
+);
+
+// @route    DELETE api/profile/experience/:exp_id
+// @desc     Delete experience from profile
+// @access   Private
+
+router.delete('/experience/:exp_id', auth, async (req, res) => {
   try {
-    // Comme on passe d'abord par auth, on a accès à l'id grâce au token dans la requete car on les a rajouté dans le middleware auth
-    const profile = await Profile.findOne({ user: req.user.id });
+    const foundProfile = await Profile.findOne({ user: req.user.id });
 
-    // Get remove index
-    const removeIndex = profile.experience.map(item => item.id).indexOf(req.params.exp_id);
+    foundProfile.experience = foundProfile.experience.filter(
+      (exp) => exp._id.toString() !== req.params.exp_id
+    );
 
-    profile.experience.splice(removeIndex, 1);
-
-    await profile.save();
-
-    res.json(profile)
-  } catch (err) {
-    console.error(err.message)
-    res.status(400).json({ msg: "Profile not found" })
+    await foundProfile.save();
+    return res.status(200).json(foundProfile);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ msg: 'Server error' });
   }
-})
+});
 
+// @route    PUT api/profile/education
+// @desc     Add profile education
+// @access   Private
+router.put(
+  '/education',
+  auth,
+  check('school', 'School is required').notEmpty(),
+  check('degree', 'Degree is required').notEmpty(),
+  check('fieldofstudy', 'Field of study is required').notEmpty(),
+  check('from', 'From date is required and needs to be from the past')
+    .notEmpty()
+    .custom((value, { req }) => (req.body.to ? value < req.body.to : true)),
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
 
-// @route   PUT api/profile/education
-// @desc    Add profile education
-// @access  Private
-router.put("/education", [ auth, [
-  check("school", "School is required")
-    .not()
-    .isEmpty(),
-  check("degree", "Degree is required")
-    .not()
-    .isEmpty(),
-  check("fieldofstudy", "Field of study is required")
-    .not()
-    .isEmpty(),
-  check("from", "From date is required")
-    .not()
-    .isEmpty(),
+    try {
+      const profile = await Profile.findOne({ user: req.user.id });
 
-] ], async (req, res) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({ errors: errors.array() });
+      profile.education.unshift(req.body);
+
+      await profile.save();
+
+      res.json(profile);
+    } catch (err) {
+      console.error(err.message);
+      res.status(500).send('Server Error');
+    }
   }
+);
 
-  // On récupère les infos de la requêtes
-  const {
-    school,
-    degree,
-    fieldofstudy,
-    from,
-    to,
-    current,
-    description
-  } = req.body;
+// @route    DELETE api/profile/education/:edu_id
+// @desc     Delete education from profile
+// @access   Private
 
-  // On crée un nouvel obj à partir des infos du dessus
-  const newEdu = {
-    school,
-    degree,
-    fieldofstudy,
-    from,
-    to,
-    current,
-    description
-  }
-
+router.delete('/education/:edu_id', auth, async (req, res) => {
   try {
-    // Comme on passe d'abord par auth, on a accès à l'id grâce au token dans la requete car on les a rajouté dans le middleware auth
-    const profile = await Profile.findOne({ user: req.user.id });
+    const foundProfile = await Profile.findOne({ user: req.user.id });
+    foundProfile.education = foundProfile.education.filter(
+      (edu) => edu._id.toString() !== req.params.edu_id
+    );
+    await foundProfile.save();
+    return res.status(200).json(foundProfile);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ msg: 'Server error' });
+  }
+});
 
-    profile.education.unshift(newEdu);
+// @route    GET api/profile/github/:username
+// @desc     Get user repos from Github
+// @access   Public
+router.get('/github/:username', async (req, res) => {
+  try {
+    const uri = encodeURI(
+      `https://api.github.com/users/${req.params.username}/repos?per_page=5&sort=created:asc`
+    );
+    const headers = {
+      'user-agent': 'node.js',
+      Authorization: `token ${config.get('githubToken')}`
+    };
 
-    await profile.save();
-
-    res.json(profile);
+    const gitHubResponse = await axios.get(uri, { headers });
+    return res.json(gitHubResponse.data);
   } catch (err) {
     console.error(err.message);
-    res.status(500).send("Server Error")
+    return res.status(404).json({ msg: 'No Github profile found' });
   }
-})
+});
 
-
-// @route   DELETE api/profile/education/:edu_id
-// @desc    Delete education from profile
-// @access  Private
-router.delete("/education/:edu_id", auth, async (req, res) => {
-  try {
-    // Comme on passe d'abord par auth, on a accès à l'id grâce au token dans la requete car on les a rajouté dans le middleware auth
-    const profile = await Profile.findOne({ user: req.user.id });
-
-    // Get remove index
-    const removeIndex = profile.education.map(item => item.id).indexOf(req.params.edu_id);
-
-    profile.education.splice(removeIndex, 1);
-
-    await profile.save();
-
-    res.json(profile)
-  } catch (err) {
-    console.error(err.message)
-    res.status(400).json({ msg: "Profile not found" })
-  }
-})
-
-
-// Route utilisée pour récupérer les repos github, il faut vérifier si l'uri de la requête est toujours à jour (tuto ancien) et poser le githubClientId et githubSecret récupérable sur le site de github
-// // @route   GET api/profile/github/:username
-// // @desc    Get user repos from Github
-// // @access  Public
-// router.get("/github/:username", async (req, res) => {
-//   try {
-//     const options = {
-//       uri: `https://api/github.com/users/${req.params.username}/repos?per_page=5&sort=created:asc&client_id=${config.get("githubClientId")}&client_secret=${config.get("githubSecret")}`,
-//       method: "GET",
-//       headers: { "user-agent": "node.js" }
-//     };
-
-//     request(options, (error, response, body) => {
-//       if (error) console.error(error);
-
-//       if (response.statusCode !== 200) {
-//         return res.status(404).json({ msg: "No Github Profile found" })
-//       }
-
-//       res.json(JSON.parse(body));
-//     })
-//   } catch (err) {
-//     console.error(err.message);
-//     res.status(500).send("Server Error");
-//   }
-// })
-
-module.exports = router
+module.exports = router;
